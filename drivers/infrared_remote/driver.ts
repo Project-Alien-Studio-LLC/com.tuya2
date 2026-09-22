@@ -185,6 +185,9 @@ export default class TuyaOAuth2DriverIrController extends TuyaOAuth2Driver {
 
       for (const controllerRemote of controllerRemotes) {
         const remoteDevice = deviceIndex[controllerRemote.remote_id];
+        if (remoteDevice === undefined) {
+          throw new Error(this.homey.__('error_remote_not_found'));
+        }
         if (!oAuth2Client.isRegistered(remoteDevice.product_id, remoteDevice.id)) {
           filteredDevices.push(remoteDevice);
           pairingRemotes[remoteDevice.id] = { ...controllerRemote, controllerId: controller.id };
@@ -333,7 +336,7 @@ export default class TuyaOAuth2DriverIrController extends TuyaOAuth2Driver {
           break;
       }
 
-      this.log('Props:', JSON.stringify(deviceProperties));
+      oAuth2Client.debug('Props:', JSON.stringify(deviceProperties));
 
       listDevices.push(deviceProperties);
     }

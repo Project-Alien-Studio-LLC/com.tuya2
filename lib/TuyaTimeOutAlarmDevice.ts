@@ -3,6 +3,23 @@ import TuyaOAuth2Device from './TuyaOAuth2Device.js';
 export default class TuyaTimeOutAlarmDevice extends TuyaOAuth2Device {
   private alarmTimeouts: Record<string, NodeJS.Timeout | undefined> = {};
 
+  public async onOAuth2Deleted(): Promise<void> {
+    this.clearAlarmTimeouts();
+    await super.onOAuth2Deleted();
+  }
+
+  public async onOAuth2Uninit(): Promise<void> {
+    this.clearAlarmTimeouts();
+    await super.onOAuth2Uninit();
+  }
+
+  private clearAlarmTimeouts(): void {
+    for (const capability of Object.keys(this.alarmTimeouts)) {
+      this.homey.clearTimeout(this.alarmTimeouts[capability]);
+      delete this.alarmTimeouts[capability];
+    }
+  }
+
   protected async initAlarm(capability: string, checkResetSetting = true): Promise<void> {
     if (!this.hasCapability(capability)) {
       return;

@@ -75,6 +75,7 @@ export default class TuyaOAuth2Driver extends OAuth2Driver<TuyaHaClient> {
       sessionId: OAuth2Util.getRandomId(),
       configId: OAuth2ConfigId,
     });
+    let isTemporaryClient = true;
 
     const OAuth2Config = this.homey.app.getConfig({
       configId: OAuth2ConfigId,
@@ -89,6 +90,7 @@ export default class TuyaOAuth2Driver extends OAuth2Driver<TuyaHaClient> {
             configId: OAuth2ConfigId,
             sessionId: OAuth2SessionId,
           });
+          isTemporaryClient = false;
           this.log(`Multi-Session disabled. Selected ${OAuth2SessionId} as active session.`);
         } catch (err) {
           this.error(err);
@@ -103,6 +105,14 @@ export default class TuyaOAuth2Driver extends OAuth2Driver<TuyaHaClient> {
     session.setHandler('showView', async view => {
       // Skip authentication if we already have a session
       if (view === 'usercode' && OAuth2SessionId !== '$new' && client.getToken() !== null) {
+        if (device !== undefined) {
+          // Repair sessions only have the 'usercode' and 'qrcode' views, so the token is
+          // still valid: re-save the session and finish the repair right away.
+          client.save();
+          session.done().catch(this.error);
+          return;
+        }
+
         session.showView('retrieve_devices').catch(this.error);
         return;
       }
@@ -172,6 +182,7 @@ export default class TuyaOAuth2Driver extends OAuth2Driver<TuyaHaClient> {
           if (sessionWasNew) {
             // Destroy the temporary client
             client.destroy();
+            isTemporaryClient = false;
 
             // Replace the temporary client by the final one
             client = this.homey.app.createOAuth2Client({
@@ -253,6 +264,11 @@ export default class TuyaOAuth2Driver extends OAuth2Driver<TuyaHaClient> {
       this.log('Disconnected');
       waitingForQrScan = false;
       foundDevices = [];
+      if (isTemporaryClient) {
+        // The temporary client was never promoted to a saved session, destroy it
+        isTemporaryClient = false;
+        client.destroy();
+      }
     });
   }
 

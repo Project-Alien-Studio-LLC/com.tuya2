@@ -29,7 +29,7 @@ export default class TuyaOAuth2Device extends OAuth2Device<TuyaHaClient> {
     this.resolveReadyPromise = resolve;
   });
 
-  protected syncTimeout?: number;
+  protected syncTimeout?: NodeJS.Timeout;
 
   protected online: boolean | null = null;
 
@@ -156,6 +156,11 @@ export default class TuyaOAuth2Device extends OAuth2Device<TuyaHaClient> {
     if (this.__syncInterval) {
       this.homey.clearInterval(this.__syncInterval);
       delete this.__syncInterval;
+    }
+
+    if (this.syncTimeout) {
+      this.homey.clearTimeout(this.syncTimeout);
+      delete this.syncTimeout;
     }
 
     if (this.oAuth2Client) {

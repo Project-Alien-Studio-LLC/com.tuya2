@@ -12,8 +12,12 @@
   "error_setting_switch": "Failed to set switch state.",
   "error_min_max_brightness": "The minimum brightness must be less than the maximum.",
   "error_no_token": "Token not found. Try repairing one of your devices.",
+  "error_refreshing_token": "Error while refreshing the token. Try repairing one of your devices.",
   "error_refreshing_token_access": "Could not refresh token. Try repairing one of your devices.",
   "error_refreshing_token_refresh": "Could not refresh login. Try repairing one of your devices.",
+  "error_token_refresh_disabled": "Automatic Tuya token refresh failed multiple times and has been disabled. Repair one of your Tuya devices to re-enable it.",
+  "error_not_implemented": "This feature is not supported.",
+  "error_remote_not_found": "Could not find the infrared remote on the controller.",
   "pair": {
     "qrcode": {
       "title": "Scan QR Code",

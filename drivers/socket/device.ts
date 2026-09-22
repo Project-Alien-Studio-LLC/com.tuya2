@@ -78,7 +78,7 @@ export default class TuyaOAuth2DeviceSocket extends TuyaOAuth2Device {
 
     if (typeof status['add_ele'] === 'number' && changedStatusCodes.includes('add_ele')) {
       const scaling = 10.0 ** parseInt(this.getSetting('meter_power_scaling') ?? '0');
-      const current = await this.getCapabilityValue('meter_power');
+      const current = (await this.getCapabilityValue('meter_power')) ?? 0;
       await this.safeSetCapabilityValue('meter_power', current + status['add_ele'] / scaling);
     }
 

@@ -228,6 +228,11 @@ export default class TuyaHaTokenManager {
         } else {
           this.error('Automated refresh disabled due to continued failures');
           this.autoTokenRefreshEnabled = false;
+          this.homey.notifications
+            .createNotification({
+              excerpt: this.homey.__('error_token_refresh_disabled'),
+            })
+            .catch(e => this.error('Failed to create notification', e));
         }
         this.client.emit('token_error', true, e);
       });
@@ -241,6 +246,20 @@ export default class TuyaHaTokenManager {
 
   public async waitForRefresh(): Promise<void> {
     await this.initialRefresh;
+    await this.tokenRefreshPromise;
+  }
+
+  /**
+   * Trigger a single immediate token refresh, e.g. when the API reports the token is expired.
+   * If a refresh is already in progress, that refresh is awaited instead.
+   */
+  public async refreshTokenNow(): Promise<void> {
+    if (this.tokenRefreshPromise) {
+      // Refresh already in progress
+      return this.tokenRefreshPromise;
+    }
+
+    this.tokenRefreshPromise = this.executeTokenRefresh();
     await this.tokenRefreshPromise;
   }
 

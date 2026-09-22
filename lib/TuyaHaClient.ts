@@ -110,11 +110,15 @@ export default class TuyaHaClient extends OAuth2Client<TuyaHaToken> {
       // 1010 (expired token) means the refresh token is also expired
       if (code === -9999999 || code === 1004) {
         this.log('Access token expired', code);
+        // Trigger a single immediate token refresh before giving up on this request
+        await this.tokenManager.refreshTokenNow().catch(this.error);
         throw new TuyaOAuth2Error(this.homey.__('error_refreshing_token_access'), response.status, code);
       }
 
       if (code === 1010) {
         this.log('Refresh token expired', code);
+        // Trigger a single immediate token refresh before giving up on this request
+        await this.tokenManager.refreshTokenNow().catch(this.error);
         throw new TuyaOAuth2Error(this.homey.__('error_refreshing_token_refresh'), response.status, code);
       }
 
@@ -246,16 +250,17 @@ export default class TuyaHaClient extends OAuth2Client<TuyaHaToken> {
     const requestId = nanoid();
     this.log('GET', requestId, path);
     return await this.get<T>({ path, query }).then(result => {
-      this.log('GET Response', requestId, JSON.stringify(result));
+      this.debug('GET Response', requestId, JSON.stringify(result));
       return result;
     });
   }
 
   private async _post<T>(path: string, payload?: unknown): Promise<T> {
     const requestId = nanoid();
-    this.log('POST', requestId, path, JSON.stringify(payload));
+    this.log('POST', requestId, path);
+    this.debug('POST Payload', requestId, JSON.stringify(payload));
     return await this.post<T>({ path, json: payload }).then(result => {
-      this.log('POST Response', requestId, JSON.stringify(result));
+      this.debug('POST Response', requestId, JSON.stringify(result));
 
       return result;
     });
@@ -274,7 +279,7 @@ export default class TuyaHaClient extends OAuth2Client<TuyaHaToken> {
     infraredControllerId: string, // eslint-disable-line @typescript-eslint/no-unused-vars
     infraredRemoteId: string, // eslint-disable-line @typescript-eslint/no-unused-vars
   ): Promise<TuyaIrRemoteKeysResponse> {
-    throw new Error('Not implemented');
+    throw new Error(this.homey.__('error_not_implemented'));
     // return this._get(`/v2.0/infrareds/${infraredControllerId}/remotes/${infraredRemoteId}/keys`);
   }
 
@@ -285,7 +290,7 @@ export default class TuyaHaClient extends OAuth2Client<TuyaHaToken> {
     keyId?: number, // eslint-disable-line @typescript-eslint/no-unused-vars
     keyString?: string, // eslint-disable-line @typescript-eslint/no-unused-vars
   ): Promise<boolean> {
-    throw new Error('Not implemented');
+    throw new Error(this.homey.__('error_not_implemented'));
     // return this._post(`/v2.0/infrareds/${infraredControllerId}/remotes/${infraredRemoteId}/raw/command`, {
     //   category_id: categoryId,
     //   key_id: keyId,
@@ -395,7 +400,8 @@ export default class TuyaHaClient extends OAuth2Client<TuyaHaToken> {
         this.requestingMqttConfig = false;
       }
 
-      this.log('MQTT config:', JSON.stringify(mqttConfig));
+      // Never log the full MQTT config, it contains the username and password
+      this.log('MQTT config:', JSON.stringify({ url: mqttConfig.url, clientId: mqttConfig.clientId }));
       this.mqttConfig = mqttConfig;
       this.mqttClient = await mqtt.connectAsync(mqttConfig.url, {
         clientId: mqttConfig.clientId,
@@ -403,23 +409,27 @@ export default class TuyaHaClient extends OAuth2Client<TuyaHaToken> {
         password: mqttConfig.password,
       });
       this.mqttClient.on('message', async (topic, message) => {
-        const json = JSON.parse(message.toString()) as TuyaMqttMessage;
+        let json: TuyaMqttMessage;
+        try {
+          json = JSON.parse(message.toString()) as TuyaMqttMessage;
+        } catch (error) {
+          this.debug('Ignoring malformed MQTT message:', error);
+          return;
+        }
 
-        this.log('Incoming MQTT:', JSON.stringify(json.data));
+        this.debug('Incoming MQTT:', JSON.stringify(json.data));
 
-        const deviceId = json.data.devId ?? json.data.bizData.devId;
-        const dataPoints = json.data.status ?? [];
+        const deviceId = json.data?.devId ?? json.data?.bizData?.devId;
+        const dataPoints = json.data?.status ?? [];
 
         const status: { [key: string]: unknown } = {};
         const changedStatusCodes: string[] = [];
 
         for (const dataPoint of dataPoints) {
           const unknownDatapoint = dataPoint as Record<`${number}`, unknown>;
-          if (
-            typeof unknownDatapoint === 'object' &&
-            Object.keys(unknownDatapoint).length === 1 &&
-            Number.isInteger(Object.keys(unknownDatapoint)[0])
-          ) {
+          const unknownDatapointKeys =
+            typeof unknownDatapoint === 'object' && unknownDatapoint !== null ? Object.keys(unknownDatapoint) : [];
+          if (unknownDatapointKeys.length === 1 && /^\d+$/.test(unknownDatapointKeys[0])) {
             // When in form of `{"4":"low"}`, skip.
             continue;
           }
@@ -432,9 +442,14 @@ export default class TuyaHaClient extends OAuth2Client<TuyaHaToken> {
           changedStatusCodes.push(dataPoint.code);
         }
 
-        if (['online', 'offline'].includes(json.data.bizCode)) {
-          status['online'] = json.data.bizCode === 'online';
+        if (['online', 'offline'].includes(json.data?.bizCode)) {
+          status['online'] = json.data?.bizCode === 'online';
           changedStatusCodes.push('online');
+        }
+
+        if (deviceId === undefined) {
+          this.debug('Ignoring MQTT message without device id');
+          return;
         }
 
         const registeredDevice = this.registeredDevices.get(deviceId);
@@ -451,6 +466,11 @@ export default class TuyaHaClient extends OAuth2Client<TuyaHaToken> {
           await registeredOtherDevice.onStatus('status', status, changedStatusCodes).catch(this.error);
         }
       });
+    } catch (error) {
+      // Clear the MQTT state so a later subscribeToMqtt call retries the connection
+      this.mqttClient = undefined;
+      this.mqttPromise = undefined;
+      throw error;
     } finally {
       resolveMqttPromise();
     }
@@ -498,4 +518,4 @@ export default class TuyaHaClient extends OAuth2Client<TuyaHaToken> {
   }
 }
 
-TuyaHaClient.setMaxListeners(Infinity);
+TuyaHaClient.setMaxListeners(100);

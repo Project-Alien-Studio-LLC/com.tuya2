@@ -39,53 +39,6 @@ export function convertStatusArrayToStatusObject(statuses?: TuyaStatusResponse):
 }
 
 /*
- * Sign headers for the Tuya API
- */
-export function getSignedHeaders({
-  method,
-  body = '',
-  path,
-  clientId,
-  clientSecret,
-  accessToken = null,
-  nonce = crypto.randomBytes(16).toString('hex'),
-  bundleId = 'app.homey',
-  t = Date.now(),
-}: {
-  method: string;
-  body?: string;
-  path: string;
-  clientId: string;
-  clientSecret: string;
-  accessToken?: string | null;
-  nonce?: string;
-  bundleId?: string;
-  t?: number;
-}): Record<string, string> {
-  const headers: Record<string, string> = {};
-
-  // Calculate signature
-  const contentHash = crypto.createHash('sha256').update(body).digest('hex');
-
-  const stringToSign =
-    typeof accessToken === 'string'
-      ? `${clientId}${accessToken}${t}${nonce}${bundleId}${method}\n${contentHash}\n\n${path}`
-      : `${clientId}${t}${nonce}${bundleId}${method}\n${contentHash}\n\n${path}`;
-
-  headers['t'] = String(t);
-  headers['nonce'] = String(nonce);
-  headers['client_id'] = String(clientId);
-  headers['sign_method'] = 'HMAC-SHA256';
-  headers['sign'] = crypto.createHmac('sha256', clientSecret).update(stringToSign).digest('hex').toUpperCase();
-
-  if (typeof accessToken === 'string') {
-    headers['access_token'] = accessToken;
-  }
-
-  return headers;
-}
-
-/*
  * Redact sensitive fields when logging Device information
  */
 export function redactFields(device: TuyaDeviceResponse, additionalFields: string[] = []): TuyaDeviceResponse {
@@ -130,7 +83,7 @@ export async function handleScaleSetting<T extends string, S extends Record<T, s
 
   const oldScaling = computeScaleFactor(event.oldSettings[settingKey]);
   const newScaling = computeScaleFactor(event.newSettings[settingKey]);
-  const oldValue = device.getCapabilityValue(homeyCapability);
+  const oldValue = device.getCapabilityValue(homeyCapability) ?? 0;
   const newValue = (oldValue * oldScaling) / newScaling;
 
   await device.setCapabilityValue(homeyCapability, newValue);
