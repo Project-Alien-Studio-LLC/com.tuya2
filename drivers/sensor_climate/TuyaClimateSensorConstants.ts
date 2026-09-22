@@ -2,7 +2,8 @@
 export const CLIMATE_SENSOR_CAPABILITIES = {
   read_write: ['switch'],
   read_only: ['temper_alarm'],
-  read_only_scaled: ['va_temperature', 'va_humidity', 'bright_value'],
+  read_only_scaled: ['va_temperature', 'bright_value'],
+  humidity_capabilities: ['va_humidity', 'humidity_value'],
   setting: [],
 } as const;
 
@@ -10,6 +11,7 @@ export const CLIMATE_CAPABILITY_MAPPING = {
   switch: 'onoff',
   va_temperature: 'measure_temperature',
   va_humidity: 'measure_humidity',
+  humidity_value: 'measure_humidity',
   bright_value: 'measure_luminance',
   battery_value: 'measure_battery',
   va_battery: 'measure_battery',
